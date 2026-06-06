@@ -1,0 +1,11 @@
+claude-sessions
+
+Based on agent-sessions by Vineeth Krishnan (MIT License).
+Upstream: https://github.com/vineethkrishnan/agent-sessions
+Fork point: main @ initial fork (see git history: upstream/main).
+
+This fork adds tmux orchestration (a persistent "HOME" dashboard, jump-to-live,
+resume-in-new-window), liveness detection via .wt-session locks, and integration
+with the local worktree tooling (c / set-focus / wtrm). All additions live under
+src/domain/rooms/. Upstream code under src/domain/session/ remains under its
+original MIT license; see LICENSE.

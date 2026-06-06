@@ -1,11 +1,12 @@
 {
-  "name": "@vineethnkrishnan/agent-sessions",
-  "version": "0.1.16",
-  "description": "Interactive session manager for CLI agents (Claude, Gemini, Codex, Cursor, Windsurf) — browse, search, delete, and resume past conversations",
+  "name": "claude-sessions",
+  "version": "0.1.0",
+  "description": "A persistent tmux dashboard for Claude Code sessions — see live vs dormant, jump into running ones, resume old ones, spawn new ones, all without typing a tmux command. Fork of agent-sessions.",
   "type": "module",
   "bin": {
-    "agent-sessions": "dist/cli.js"
+    "claude-sessions": "dist/cli.js"
   },
+  "upstream": "https://github.com/vineethkrishnan/agent-sessions",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

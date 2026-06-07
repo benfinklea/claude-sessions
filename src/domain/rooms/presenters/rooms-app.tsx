@@ -58,7 +58,11 @@ export function RoomsApp({ module, options, version, onRequest }: RoomsAppProps)
           exit();
           break;
         case "rename":
-          if (intent.session.worktreeRoot) {
+          if (intent.session.machine) {
+            setNotice(
+              `Rename works on local sessions only (this one is on ${intent.session.machine}).`,
+            );
+          } else if (intent.session.worktreeRoot) {
             module.worktreeActions.setFocus(intent.session.worktreeRoot, intent.label);
             setNotice(`Renamed → “${intent.label}”. Refresh (r) to update the list.`);
           } else {
@@ -67,7 +71,11 @@ export function RoomsApp({ module, options, version, onRequest }: RoomsAppProps)
           break;
         case "close": {
           const root = intent.session.worktreeRoot;
-          if (!root) {
+          if (intent.session.machine) {
+            setNotice(
+              `Close works on local sessions only (this one is on ${intent.session.machine}).`,
+            );
+          } else if (!root) {
             setNotice("Can't close: no worktree found.");
           } else if (intent.session.isLive) {
             setNotice("That session is live — end the agent first, then close.");

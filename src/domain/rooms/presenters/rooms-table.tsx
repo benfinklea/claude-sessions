@@ -18,7 +18,7 @@ interface RoomsTableProps {
   onPreview: (session: Session) => void;
 }
 
-const COL = { focus: 40, project: 22, branch: 18, when: 9, msgs: 5 };
+const COL = { focus: 38, where: 8, project: 20, branch: 16, when: 9, msgs: 5 };
 
 function glyph(s: Session): { mark: string; color?: string } {
   if (s.isLive) return { mark: "●", color: "green" };
@@ -184,7 +184,7 @@ export function RoomsTable({
         ? "Resume (clean)"
         : "Resume";
 
-  const header = `  ${padRight("Session", COL.focus)} ${padRight("Project", COL.project)} ${padRight("Branch", COL.branch)} ${padRight("When", COL.when)} Msgs`;
+  const header = `  ${padRight("Session", COL.focus)} ${padRight("Where", COL.where)} ${padRight("Project", COL.project)} ${padRight("Branch", COL.branch)} ${padRight("When", COL.when)} Msgs`;
 
   let lastSection = "";
   const rows: React.ReactNode[] = [];
@@ -202,7 +202,8 @@ export function RoomsTable({
     }
     const g = glyph(s);
     const label = s.focusLabel ?? truncate(s.preview, COL.focus);
-    const line = `${padRight(truncate(label, COL.focus), COL.focus)} ${padRight(truncate(s.project, COL.project), COL.project)} ${padRight(truncate(s.gitBranch, COL.branch), COL.branch)} ${padRight(relTime(s.modifiedAt), COL.when)} ${s.messageCount}`;
+    const where = s.machine ?? "local";
+    const line = `${padRight(truncate(label, COL.focus), COL.focus)} ${padRight(truncate(where, COL.where), COL.where)} ${padRight(truncate(s.project, COL.project), COL.project)} ${padRight(truncate(s.gitBranch, COL.branch), COL.branch)} ${padRight(relTime(s.modifiedAt), COL.when)} ${s.messageCount}`;
     rows.push(
       <Box key={s.id}>
         <Text color={isSel ? "cyan" : g.color} bold={isSel}>

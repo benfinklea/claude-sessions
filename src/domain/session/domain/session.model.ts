@@ -19,6 +19,8 @@ export interface SessionParams {
   readonly isLive?: boolean;
   readonly isStale?: boolean;
   readonly tmuxTarget?: TmuxTargetRef;
+  /** Which machine this session lives on. undefined = local. e.g. "pippen". */
+  readonly machine?: string;
 }
 
 export class Session {
@@ -36,6 +38,7 @@ export class Session {
   readonly isLive?: boolean;
   readonly isStale?: boolean;
   readonly tmuxTarget?: TmuxTargetRef;
+  readonly machine?: string;
 
   constructor(params: SessionParams) {
     this.id = params.id;
@@ -52,6 +55,7 @@ export class Session {
     this.isLive = params.isLive;
     this.isStale = params.isStale;
     this.tmuxTarget = params.tmuxTarget;
+    this.machine = params.machine;
   }
 
   /** A new Session with the enrichment fields overlaid (upstream fields preserved). */
@@ -69,7 +73,7 @@ export class Session {
     if (!query) return true;
     const lower = query.toLowerCase();
     const searchable =
-      `${this.provider} ${this.project} ${this.gitBranch} ${this.preview} ${this.cwd} ${this.focusLabel ?? ""}`.toLowerCase();
+      `${this.provider} ${this.project} ${this.gitBranch} ${this.preview} ${this.cwd} ${this.focusLabel ?? ""} ${this.machine ?? ""}`.toLowerCase();
     return searchable.includes(lower);
   }
 }

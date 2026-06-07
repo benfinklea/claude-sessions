@@ -35,6 +35,15 @@ function isAutomationCwd(cwd: string): boolean {
   );
 }
 
+/**
+ * Scheduled/headless agents (e.g. "You are a meeting note sync agent…") open
+ * with a system-prompt-style first message. Hidden by default. A human can
+ * still see them with --all if they ever typed such a prompt interactively.
+ */
+function isAgentPreview(preview: string): boolean {
+  return /^you are an? /i.test(preview.trim());
+}
+
 export class ClaudeSessionProvider implements SessionProviderPort {
   readonly name = "Claude";
   buildResumeArgs(sessionId: string) {
@@ -91,8 +100,8 @@ export class ClaudeSessionProvider implements SessionProviderPort {
     results.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
     const includeAgents = this.includeAgents();
 
-    const keep = (m: { isSidechain: boolean; cwd: string }) =>
-      includeAgents || (!m.isSidechain && !isAutomationCwd(m.cwd));
+    const keep = (m: { isSidechain: boolean; cwd: string; preview: string }) =>
+      includeAgents || (!m.isSidechain && !isAutomationCwd(m.cwd) && !isAgentPreview(m.preview));
 
     const toSession = (
       file: (typeof results)[number],

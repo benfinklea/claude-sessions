@@ -104,6 +104,15 @@ describe("ClaudeSessionProvider", () => {
       path.join(projectDir, "agent-123.jsonl"),
       JSON.stringify({ type: "user", message: { content: "agent" }, cwd: "/Users/test/x" }) + "\n",
     );
+    // a scheduled/headless agent whose first message is a system prompt
+    fs.writeFileSync(
+      path.join(projectDir, "session-sched.jsonl"),
+      JSON.stringify({
+        type: "user",
+        message: { content: "You are a meeting note sync agent. Your job is..." },
+        cwd: "/Users/test",
+      }) + "\n",
+    );
 
     delete process.env.CLAUDE_SESSIONS_INCLUDE_AGENTS;
     const visible = await new ClaudeSessionProvider(tmpDir).findAll();
@@ -112,7 +121,7 @@ describe("ClaudeSessionProvider", () => {
 
     process.env.CLAUDE_SESSIONS_INCLUDE_AGENTS = "1";
     const all = await new ClaudeSessionProvider(tmpDir).findAll();
-    expect(all.length).toBe(5);
+    expect(all.length).toBe(6);
     delete process.env.CLAUDE_SESSIONS_INCLUDE_AGENTS;
   });
 

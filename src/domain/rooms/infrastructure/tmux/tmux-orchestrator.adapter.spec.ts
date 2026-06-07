@@ -99,10 +99,14 @@ describe("TmuxOrchestratorAdapter", () => {
     expect(t).toEqual({ session: "sessions", window: 5 });
   });
 
-  it("paneMap parses session/window/path triples", () => {
-    spawnSync.mockReturnValue(ok("sessions\t0\t/home\nsessions\t1\t/Volumes/x\n"));
+  it("paneMap parses session/window/path triples and excludes the lobby HOME window", () => {
+    spawnSync.mockReturnValue(
+      ok("sessions\t0\t/home\nsessions\t1\t/Volumes/x\nmain\t4\t/Volumes/y\n"),
+    );
     const m = new TmuxOrchestratorAdapter("sessions").paneMap();
-    expect(m.get("/home")).toEqual({ session: "sessions", window: 0 });
+    // sessions:0 is the dashboard's own HOME window — excluded.
+    expect(m.get("/home")).toBeUndefined();
     expect(m.get("/Volumes/x")).toEqual({ session: "sessions", window: 1 });
+    expect(m.get("/Volumes/y")).toEqual({ session: "main", window: 4 });
   });
 });

@@ -5,6 +5,7 @@ import type { SessionProviderPort } from "../../../application/ports/session-pro
 import { Session } from "../../../domain/session.model.js";
 import { SessionDetail } from "../../../domain/session-detail.model.js";
 import { parseSessionFileAsync, parseSessionDetail } from "../../parsers/jsonl-parser.js";
+import { ParseCache } from "../../parsers/parse-cache.js";
 import { decodeProjectPath } from "../../../../../common/helpers/path.helper.js";
 
 /**
@@ -50,12 +51,31 @@ export class ClaudeSessionProvider implements SessionProviderPort {
     return { command: "claude", args: ["--resume", sessionId] };
   }
   private readonly sessionsDir: string;
+  // Disk parse-cache only when running against the default location (production),
+  // not when a test passes an explicit dir — keeps tests hermetic.
+  private readonly cache: ParseCache | null;
 
   constructor(sessionsDir?: string) {
     this.sessionsDir =
       sessionsDir ??
       process.env.CLAUDE_SESSIONS_DIR ??
       path.join(os.homedir(), ".claude", "projects");
+    this.cache = sessionsDir || process.env.CLAUDE_SESSIONS_NO_CACHE ? null : new ParseCache();
+  }
+
+  /** Parse a file's metadata, reusing the mtime-keyed cache when valid. */
+  private async metaFor(filePath: string, mtimeMs: number) {
+    const hit = this.cache?.get(filePath, mtimeMs);
+    if (hit) return hit;
+    const meta = await parseSessionFileAsync(filePath);
+    this.cache?.set(filePath, mtimeMs, {
+      preview: meta.preview,
+      gitBranch: meta.gitBranch,
+      cwd: meta.cwd,
+      messageCount: meta.messageCount,
+      isSidechain: meta.isSidechain,
+    });
+    return meta;
   }
 
   private includeAgents(): boolean {
@@ -125,9 +145,10 @@ export class ClaudeSessionProvider implements SessionProviderPort {
       const parsed = await Promise.all(
         results.map(async (file) => ({
           file,
-          metadata: await parseSessionFileAsync(file.filePath),
+          metadata: await this.metaFor(file.filePath, file.mtime.getTime()),
         })),
       );
+      this.cache?.save(true); // full scan → safe to prune stale entries
       return parsed.filter((p) => keep(p.metadata)).map((p) => toSession(p.file, p.metadata));
     }
 
@@ -139,13 +160,17 @@ export class ClaudeSessionProvider implements SessionProviderPort {
     for (let i = 0; i < results.length && out.length < limit; i += BATCH) {
       const batch = results.slice(i, i + BATCH);
       const parsed = await Promise.all(
-        batch.map(async (file) => ({ file, metadata: await parseSessionFileAsync(file.filePath) })),
+        batch.map(async (file) => ({
+          file,
+          metadata: await this.metaFor(file.filePath, file.mtime.getTime()),
+        })),
       );
       for (const p of parsed) {
         if (keep(p.metadata)) out.push(toSession(p.file, p.metadata));
         if (out.length >= limit) break;
       }
     }
+    this.cache?.save();
     return out;
   }
 

@@ -2,6 +2,12 @@ import { useState } from "react";
 import { Text, Box, useInput, useApp } from "ink";
 import type { Session } from "../../session/domain/session.model.js";
 import { truncate, padRight } from "../../session/presenters/formatters/table-formatter.js";
+import {
+  distinctRepos,
+  applyToggleFilters,
+  nextRepo,
+  enterLabel as enterLabelFor,
+} from "./rooms-filters.js";
 
 export type RoomsIntent =
   | { kind: "resume"; session: Session }
@@ -67,12 +73,10 @@ export function RoomsTable({
   const [repoFilter, setRepoFilter] = useState<string | null>(null);
 
   // Distinct repos present (sorted) — what `R` cycles through.
-  const repos = [...new Set(sessions.map((s) => s.repo).filter((r): r is string => !!r))].sort();
+  const repos = distinctRepos(sessions);
 
   // Apply the toggle filters; text search was already applied upstream.
-  const view = sessions.filter(
-    (s) => (!worktreesOnly || s.hasWorktree) && (repoFilter === null || s.repo === repoFilter),
-  );
+  const view = applyToggleFilters(sessions, { worktreesOnly, repoFilter });
 
   const liveCount = view.filter((s) => s.isLive).length;
   const clamped = Math.min(selected, Math.max(view.length - 1, 0));
@@ -84,12 +88,7 @@ export function RoomsTable({
 
   const cycleRepo = () => {
     setSelected(0);
-    setRepoFilter((curr) => {
-      if (repos.length === 0) return null;
-      if (curr === null) return repos[0]!;
-      const i = repos.indexOf(curr);
-      return i < 0 || i === repos.length - 1 ? null : repos[i + 1]!;
-    });
+    setRepoFilter((curr) => nextRepo(repos, curr));
   };
 
   useInput((input, key) => {
@@ -207,13 +206,7 @@ export function RoomsTable({
   }
 
   // context-aware Enter label
-  const enterLabel = !current
-    ? "—"
-    : current.isLive
-      ? "Jump"
-      : current.isStale
-        ? "Resume (clean)"
-        : "Resume";
+  const enterLabel = enterLabelFor(current);
 
   const header = `     ${padRight("Session", COL.focus)} ${padRight("Where", COL.where)} ${padRight("Project", COL.project)} ${padRight("Branch", COL.branch)} ${padRight("When", COL.when)} Msgs`;
 

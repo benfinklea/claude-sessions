@@ -20,14 +20,17 @@ const program = new Command()
   .version(pkg.version, "-v, --version")
   .option("--no-splash", "Skip the splash screen")
   .option("--limit <n>", "How many recent sessions to load (default 300)", "300")
+  .option("--all", "Include agent/subagent and workflow transcripts (hidden by default)", false)
   .parse();
 
-const opts = program.opts<{ splash: boolean; limit: string }>();
+const opts = program.opts<{ splash: boolean; limit: string; all: boolean }>();
 
 // Fast open: cap how many recent sessions the Claude provider parses.
 if (!process.env.CLAUDE_SESSIONS_LIMIT && opts.limit) {
   process.env.CLAUDE_SESSIONS_LIMIT = opts.limit;
 }
+// Hide agent/subagent/workflow transcripts unless --all.
+if (opts.all) process.env.CLAUDE_SESSIONS_INCLUDE_AGENTS = "1";
 
 const module = createRoomsModule();
 const { orchestrator, worktreeActions, resolveRowAction } = module;

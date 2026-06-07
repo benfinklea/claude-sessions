@@ -7,6 +7,8 @@ interface ParsedSessionMetadata {
   gitBranch: string;
   cwd: string;
   messageCount: number;
+  /** True when this transcript is a subagent sidechain (Task/Agent spawn), not a real session. */
+  isSidechain: boolean;
 }
 
 interface ParsedSessionDetail {
@@ -66,7 +68,7 @@ export async function parseSessionFileAsync(filePath: string): Promise<ParsedSes
   try {
     fd = fs.openSync(filePath, "r");
   } catch {
-    return { preview: "(unreadable)", gitBranch: "", cwd: "", messageCount: 0 };
+    return { preview: "(unreadable)", gitBranch: "", cwd: "", messageCount: 0, isSidechain: false };
   }
 
   const stream = fs.createReadStream("", { fd, encoding: "utf-8" });
@@ -77,6 +79,7 @@ export async function parseSessionFileAsync(filePath: string): Promise<ParsedSes
   let preview = "(no preview)";
   let gitBranch = "";
   let cwd = "";
+  let isSidechain = false;
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -92,6 +95,7 @@ export async function parseSessionFileAsync(filePath: string): Promise<ParsedSes
           }
           gitBranch = entry.gitBranch ?? "";
           cwd = entry.cwd ?? "";
+          isSidechain = entry.isSidechain === true;
         }
       } else if (entry.type === "assistant") {
         assistantCount++;
@@ -106,6 +110,7 @@ export async function parseSessionFileAsync(filePath: string): Promise<ParsedSes
     gitBranch,
     cwd,
     messageCount: userCount + assistantCount,
+    isSidechain,
   };
 }
 
@@ -113,7 +118,7 @@ export async function parseSessionFileAsync(filePath: string): Promise<ParsedSes
 export function parseSessionFile(filePath: string): ParsedSessionMetadata {
   const lines = readLines(filePath);
   if (lines.length === 0) {
-    return { preview: "(unreadable)", gitBranch: "", cwd: "", messageCount: 0 };
+    return { preview: "(unreadable)", gitBranch: "", cwd: "", messageCount: 0, isSidechain: false };
   }
 
   let userCount = 0;
@@ -121,6 +126,7 @@ export function parseSessionFile(filePath: string): ParsedSessionMetadata {
   let preview = "(no preview)";
   let gitBranch = "";
   let cwd = "";
+  let isSidechain = false;
 
   for (const line of lines) {
     try {
@@ -135,6 +141,7 @@ export function parseSessionFile(filePath: string): ParsedSessionMetadata {
           }
           gitBranch = entry.gitBranch ?? "";
           cwd = entry.cwd ?? "";
+          isSidechain = entry.isSidechain === true;
         }
       } else if (entry.type === "assistant") {
         assistantCount++;
@@ -149,6 +156,7 @@ export function parseSessionFile(filePath: string): ParsedSessionMetadata {
     gitBranch,
     cwd,
     messageCount: userCount + assistantCount,
+    isSidechain,
   };
 }
 

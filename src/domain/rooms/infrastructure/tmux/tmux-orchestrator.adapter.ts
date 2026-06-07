@@ -69,6 +69,8 @@ export class TmuxOrchestratorAdapter implements TmuxOrchestratorPort {
       if (!line.trim()) continue;
       const [session, windowStr, panePath] = line.split(FIELD_SEP);
       if (!session || windowStr === undefined || !panePath) continue;
+      // Skip the dashboard's own HOME window so it never lists/jumps to itself.
+      if (session === this.lobbySession && Number(windowStr) === 0) continue;
       map.set(panePath, { session, window: Number(windowStr) });
     }
     return map;

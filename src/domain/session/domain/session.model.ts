@@ -23,6 +23,8 @@ export interface SessionParams {
   readonly machine?: string;
   /** True when the session's worktree is a linked git worktree still on disk (not torn down). */
   readonly hasWorktree?: boolean;
+  /** Path to the newest /handoff doc for this worktree, if any (resume-where-you-left-off). */
+  readonly handoffPath?: string;
 }
 
 export class Session {
@@ -42,6 +44,7 @@ export class Session {
   readonly tmuxTarget?: TmuxTargetRef;
   readonly machine?: string;
   readonly hasWorktree?: boolean;
+  readonly handoffPath?: string;
 
   constructor(params: SessionParams) {
     this.id = params.id;
@@ -60,6 +63,7 @@ export class Session {
     this.tmuxTarget = params.tmuxTarget;
     this.machine = params.machine;
     this.hasWorktree = params.hasWorktree;
+    this.handoffPath = params.handoffPath;
   }
 
   /** A new Session with the enrichment fields overlaid (upstream fields preserved). */
@@ -70,6 +74,7 @@ export class Session {
     isStale?: boolean;
     tmuxTarget?: TmuxTargetRef;
     hasWorktree?: boolean;
+    handoffPath?: string;
   }): Session {
     return new Session({ ...this, modifiedAt: this.modifiedAt, ...extra });
   }

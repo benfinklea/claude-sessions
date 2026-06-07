@@ -16,6 +16,7 @@ export interface SessionDTO {
   isStale?: boolean;
   tmuxTarget?: { session: string; window: number };
   hasWorktree?: boolean;
+  handoffPath?: string;
 }
 
 export function toDTO(s: Session): SessionDTO {
@@ -34,6 +35,7 @@ export function toDTO(s: Session): SessionDTO {
     isStale: s.isStale,
     tmuxTarget: s.tmuxTarget,
     hasWorktree: s.hasWorktree,
+    handoffPath: s.handoffPath,
   };
 }
 
@@ -56,6 +58,7 @@ export function fromDTO(dto: SessionDTO, machine: string): Session {
     isStale: dto.isStale,
     tmuxTarget: dto.tmuxTarget,
     hasWorktree: dto.hasWorktree,
+    handoffPath: dto.handoffPath,
     machine,
   });
 }

@@ -7,7 +7,8 @@ export type RoomsIntent =
   | { kind: "resume"; session: Session }
   | { kind: "new"; slug: string }
   | { kind: "rename"; session: Session; label: string }
-  | { kind: "close"; session: Session };
+  | { kind: "close"; session: Session }
+  | { kind: "handoff"; session: Session };
 
 interface RoomsTableProps {
   sessions: Session[];
@@ -135,6 +136,8 @@ export function RoomsTable({
       setMode("rename");
     } else if ((input === "x" || input === "X") && current) {
       setMode("confirmClose");
+    } else if ((input === "h" || input === "H") && current?.handoffPath) {
+      onIntent({ kind: "handoff", session: current });
     } else if (input === " " && current) {
       onPreview(current);
     } else if (input === "q" || input === "Q") {
@@ -184,7 +187,7 @@ export function RoomsTable({
         ? "Resume (clean)"
         : "Resume";
 
-  const header = `    ${padRight("Session", COL.focus)} ${padRight("Where", COL.where)} ${padRight("Project", COL.project)} ${padRight("Branch", COL.branch)} ${padRight("When", COL.when)} Msgs`;
+  const header = `     ${padRight("Session", COL.focus)} ${padRight("Where", COL.where)} ${padRight("Project", COL.project)} ${padRight("Branch", COL.branch)} ${padRight("When", COL.when)} Msgs`;
 
   let lastSection = "";
   const rows: React.ReactNode[] = [];
@@ -205,12 +208,14 @@ export function RoomsTable({
     const where = s.machine ?? "local";
     const line = `${padRight(truncate(label, COL.focus), COL.focus)} ${padRight(truncate(where, COL.where), COL.where)} ${padRight(truncate(s.project, COL.project), COL.project)} ${padRight(truncate(s.gitBranch, COL.branch), COL.branch)} ${padRight(relTime(s.modifiedAt), COL.when)} ${s.messageCount}`;
     const wt = s.hasWorktree ? "⎇" : " ";
+    const ho = s.handoffPath ? "✎" : " ";
     rows.push(
       <Box key={s.id}>
         <Text color={isSel ? "cyan" : g.color} bold={isSel}>
           {isSel ? "▸" : " "}
           {g.mark}
-          {wt} {line}
+          {wt}
+          {ho} {line}
         </Text>
       </Box>,
     );
@@ -235,8 +240,8 @@ export function RoomsTable({
       )}
       <Box paddingTop={1}>
         <Text dimColor>
-          Enter {enterLabel} · N New · Space Peek · E Rename · X Close · / Search · Ctrl-Space Back
-          · Q Quit ⎇ active worktree
+          Enter {enterLabel} · N New · Space Peek{current?.handoffPath ? " · H Handoff" : ""} · E
+          Rename · X Close · / Search · Ctrl-Space Back · Q Quit ⎇ worktree ✎ handoff
         </Text>
       </Box>
       {(mode === "search" || filter) && (

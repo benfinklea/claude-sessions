@@ -6,6 +6,7 @@ import { SplashScreen } from "../../session/presenters/components/splash-screen.
 import { SessionPreview } from "../../session/presenters/components/session-preview.js";
 import { useSessions } from "../../session/presenters/hooks/use-sessions.js";
 import { RoomsTable, type RoomsIntent } from "./rooms-table.js";
+import { HandoffView } from "./handoff-view.js";
 
 export interface RoomsCliOptions {
   noSplash: boolean;
@@ -25,6 +26,7 @@ export function RoomsApp({ module, options, version, onRequest }: RoomsAppProps)
   const { exit } = useApp();
   const [isSplashVisible, setSplashVisible] = useState(!options.noSplash);
   const [notice, setNotice] = useState<string | null>(null);
+  const [handoff, setHandoff] = useState<{ title: string; content: string } | null>(null);
 
   // Claude-only dashboard: pin the provider so useSessions loads immediately.
   module.multiAgentRepository.setActiveProvider("claude");
@@ -89,9 +91,17 @@ export function RoomsApp({ module, options, version, onRequest }: RoomsAppProps)
           }
           break;
         }
+        case "handoff": {
+          if (intent.session.handoffPath) {
+            setHandoff(
+              module.handoffReader.read(intent.session.handoffPath, intent.session.machine),
+            );
+          }
+          break;
+        }
       }
     },
-    [exit, module.worktreeActions, onRequest],
+    [exit, module.worktreeActions, module.handoffReader, onRequest],
   );
 
   useInput((input) => {
@@ -107,6 +117,16 @@ export function RoomsApp({ module, options, version, onRequest }: RoomsAppProps)
       <Box paddingTop={1} paddingLeft={1}>
         <Text dimColor>Loading sessions…</Text>
       </Box>
+    );
+  }
+
+  if (handoff) {
+    return (
+      <HandoffView
+        title={handoff.title}
+        content={handoff.content}
+        onClose={() => setHandoff(null)}
+      />
     );
   }
 

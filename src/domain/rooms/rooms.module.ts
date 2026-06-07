@@ -6,6 +6,7 @@ import { WorktreeActionsAdapter } from "./infrastructure/worktree/worktree-actio
 import { ResolveRowActionUseCase } from "./application/use-cases/resolve-row-action.use-case.js";
 import { RemoteSessionProvider } from "./infrastructure/remote/remote-session.provider.js";
 import { CompositeSessionRepository } from "./infrastructure/remote/composite-session.repository.js";
+import { HandoffReader } from "./infrastructure/handoff/handoff-reader.js";
 
 /** Parse ROOMS_REMOTE_HOSTS ("pippen,gandalf") into a host list. */
 function remoteHosts(): string[] {
@@ -46,6 +47,7 @@ export function createRoomsModule() {
     orchestrator,
     worktreeActions: new WorktreeActionsAdapter(),
     resolveRowAction: new ResolveRowActionUseCase(),
+    handoffReader: new HandoffReader(),
     remoteHosts: remoteHosts(),
   };
 }

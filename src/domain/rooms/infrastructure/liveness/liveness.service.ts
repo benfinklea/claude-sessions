@@ -19,26 +19,46 @@ function defaultPidAlive(pid: number): boolean {
   }
 }
 
+/** Find a tmux window whose pane is sitting in (or under) the worktree. */
+function findWindowFor(
+  worktreeRoot: string,
+  paneMap: Map<string, TmuxTarget>,
+): TmuxTarget | undefined {
+  const exact = paneMap.get(worktreeRoot);
+  if (exact) return exact;
+  for (const [panePath, target] of paneMap) {
+    if (panePath.startsWith(worktreeRoot + "/")) return target;
+  }
+  return undefined;
+}
+
 /**
- * Classify a worktree as live / dormant / stale by correlating its `.wt-session`
- * lock (pid alive + ttl) with whether a tmux window is actually sitting in it.
- * The pane map is computed once per refresh and passed in — never per session.
+ * Classify a worktree as live / dormant / stale.
+ *
+ * Primary signal: a tmux window is sitting in the worktree → live (works on any
+ * machine, no hook required). Secondary: a `.wt-session` lock with a live pid +
+ * unexpired ttl → live even if we can't see the window (rare). A lock that's
+ * present but neither pid-alive nor backed by a window → stale.
+ *
+ * Note: "newest session per worktree wins" is enforced by the enriching
+ * repository, since only it sees all sessions for a given worktree.
  */
 export class LivenessService {
   classify(worktreeRoot: string | undefined, deps: LivenessDeps): Liveness {
     if (!worktreeRoot) return { isLive: false, isStale: false };
 
-    const tmuxTarget = deps.paneMap.get(worktreeRoot);
-    const lock = parseWtSession(worktreeRoot);
+    const tmuxTarget = findWindowFor(worktreeRoot, deps.paneMap);
+    if (tmuxTarget) {
+      return { isLive: true, isStale: false, worktreeRoot, tmuxTarget };
+    }
 
-    // No lock → plain dormant history (even if a window happens to sit there).
-    if (!lock) return { isLive: false, isStale: false, worktreeRoot, tmuxTarget };
+    const lock = parseWtSession(worktreeRoot);
+    if (!lock) return { isLive: false, isStale: false, worktreeRoot };
 
     const pidAlive = (deps.pidAlive ?? defaultPidAlive)(lock.pid);
     const now = deps.now ?? Date.now();
     const expired = lock.started.getTime() + lock.ttlHours * 3_600_000 < now;
-
-    const isLive = pidAlive && !expired && tmuxTarget !== undefined;
-    return { isLive, isStale: !isLive, worktreeRoot, tmuxTarget };
+    const isLive = pidAlive && !expired;
+    return { isLive, isStale: !isLive, worktreeRoot };
   }
 }

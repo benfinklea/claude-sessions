@@ -9,7 +9,7 @@ describe("LivenessService", () => {
   let root: string;
   const svc = new LivenessService();
   const NOW = Date.parse("2026-06-06T12:00:00Z");
-  const target: TmuxTarget = { session: "sessions", window: 3 };
+  const target: TmuxTarget = { session: "main", window: 3 };
 
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "live-"));
@@ -27,59 +27,48 @@ describe("LivenessService", () => {
   const map = (entries: Array<[string, TmuxTarget]> = []) => new Map(entries);
 
   it("undefined worktree → not live, not stale", () => {
-    const r = svc.classify(undefined, { paneMap: map(), now: NOW });
-    expect(r).toEqual({ isLive: false, isStale: false });
+    expect(svc.classify(undefined, { paneMap: map(), now: NOW })).toEqual({
+      isLive: false,
+      isStale: false,
+    });
   });
 
-  it("no lock → dormant (not stale) even if a window sits there", () => {
-    const r = svc.classify(root, {
-      paneMap: map([[root, target]]),
-      now: NOW,
-      pidAlive: () => true,
-    });
-    expect(r.isLive).toBe(false);
-    expect(r.isStale).toBe(false);
-    expect(r.tmuxTarget).toEqual(target);
-  });
-
-  it("lock + pid alive + ttl ok + window present → LIVE", () => {
-    writeLock("2026-06-06T11:30:00Z");
-    const r = svc.classify(root, {
-      paneMap: map([[root, target]]),
-      now: NOW,
-      pidAlive: () => true,
-    });
+  it("a tmux window sitting in the worktree → LIVE (no lock needed)", () => {
+    const r = svc.classify(root, { paneMap: map([[root, target]]), now: NOW });
     expect(r.isLive).toBe(true);
     expect(r.isStale).toBe(false);
     expect(r.tmuxTarget).toEqual(target);
   });
 
-  it("stale: dead pid", () => {
-    writeLock("2026-06-06T11:30:00Z");
-    const r = svc.classify(root, {
-      paneMap: map([[root, target]]),
-      now: NOW,
-      pidAlive: () => false,
-    });
-    expect(r.isLive).toBe(false);
-    expect(r.isStale).toBe(true);
+  it("a tmux window in a SUBDIR of the worktree → LIVE", () => {
+    const r = svc.classify(root, { paneMap: map([[root + "/src/app", target]]), now: NOW });
+    expect(r.isLive).toBe(true);
+    expect(r.tmuxTarget).toEqual(target);
   });
 
-  it("stale: expired ttl", () => {
-    writeLock("2026-06-06T00:00:00Z", 4); // 12h ago, ttl 4h
-    const r = svc.classify(root, {
-      paneMap: map([[root, target]]),
-      now: NOW,
-      pidAlive: () => true,
-    });
-    expect(r.isStale).toBe(true);
-  });
-
-  it("stale: no tmux window for the worktree", () => {
+  it("no window but lock pid-alive + ttl ok → LIVE (no target)", () => {
     writeLock("2026-06-06T11:30:00Z");
     const r = svc.classify(root, { paneMap: map(), now: NOW, pidAlive: () => true });
+    expect(r.isLive).toBe(true);
+    expect(r.tmuxTarget).toBeUndefined();
+  });
+
+  it("no window, lock dead pid → stale", () => {
+    writeLock("2026-06-06T11:30:00Z");
+    const r = svc.classify(root, { paneMap: map(), now: NOW, pidAlive: () => false });
     expect(r.isLive).toBe(false);
     expect(r.isStale).toBe(true);
-    expect(r.tmuxTarget).toBeUndefined();
+  });
+
+  it("no window, lock expired ttl → stale", () => {
+    writeLock("2026-06-06T00:00:00Z", 4); // 12h ago, ttl 4h
+    const r = svc.classify(root, { paneMap: map(), now: NOW, pidAlive: () => true });
+    expect(r.isStale).toBe(true);
+  });
+
+  it("no window, no lock → dormant", () => {
+    const r = svc.classify(root, { paneMap: map(), now: NOW });
+    expect(r.isLive).toBe(false);
+    expect(r.isStale).toBe(false);
   });
 });

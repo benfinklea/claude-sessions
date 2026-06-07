@@ -37,7 +37,7 @@ export class LivenessEnrichingRepository implements SessionRepositoryPort {
     const paneMap = this.orchestrator.paneMap();
     const { resolver, focus, liveness } = this.enrichers;
 
-    return sessions.map((session) => {
+    const enriched = sessions.map((session) => {
       const worktreeRoot = resolver.resolve(session.cwd);
       const focusLabel = worktreeRoot ? focus.get(worktreeRoot) : undefined;
       const live = liveness.classify(worktreeRoot, { paneMap });
@@ -48,6 +48,23 @@ export class LivenessEnrichingRepository implements SessionRepositoryPort {
         isStale: live.isStale,
         tmuxTarget: live.tmuxTarget,
       });
+    });
+
+    // One worktree can have many past sessions but only one running now. Keep
+    // the most-recent session per worktree live; demote its older siblings to
+    // dormant so the live section reflects reality, not history.
+    const newestLiveByRoot = new Map<string, number>();
+    for (const s of enriched) {
+      if (s.isLive && s.worktreeRoot) {
+        const t = s.modifiedAt.getTime();
+        const prev = newestLiveByRoot.get(s.worktreeRoot);
+        if (prev === undefined || t > prev) newestLiveByRoot.set(s.worktreeRoot, t);
+      }
+    }
+    return enriched.map((s) => {
+      if (!s.isLive || !s.worktreeRoot) return s;
+      if (s.modifiedAt.getTime() === newestLiveByRoot.get(s.worktreeRoot)) return s;
+      return s.withEnrichment({ isLive: false, isStale: false, tmuxTarget: undefined });
     });
   }
 

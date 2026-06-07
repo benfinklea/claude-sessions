@@ -23,7 +23,7 @@ describe("ClaudeSessionProvider", () => {
         type: "user",
         message: { content: "Hello world" },
         gitBranch: "main",
-        cwd: "/tmp/app",
+        cwd: "/Users/test/projects/app",
       }) + "\n",
     );
     fs.writeFileSync(
@@ -32,7 +32,7 @@ describe("ClaudeSessionProvider", () => {
         type: "user",
         message: { content: "Fix the bug" },
         gitBranch: "fix/bug",
-        cwd: "/tmp/app",
+        cwd: "/Users/test/projects/app",
       }) + "\n",
     );
 
@@ -77,6 +77,43 @@ describe("ClaudeSessionProvider", () => {
     expect(detail.messages[0]!.role).toBe("user");
     expect(detail.messages[0]!.content).toBe("Fix the bug");
     expect(detail.totalMessages).toBe(1);
+  });
+
+  it("hides agent/automation sessions by default, shows them with include flag", async () => {
+    // a sidechain subagent transcript
+    fs.writeFileSync(
+      path.join(projectDir, "session-side.jsonl"),
+      JSON.stringify({
+        type: "user",
+        message: { content: "subagent task" },
+        cwd: "/Users/test/projects/app",
+        isSidechain: true,
+      }) + "\n",
+    );
+    // an automation/worker run in /tmp
+    fs.writeFileSync(
+      path.join(projectDir, "session-tmp.jsonl"),
+      JSON.stringify({
+        type: "user",
+        message: { content: "You are a build worker" },
+        cwd: "/private/tmp/lane-0/wt",
+      }) + "\n",
+    );
+    // a workflow agent transcript (filename)
+    fs.writeFileSync(
+      path.join(projectDir, "agent-123.jsonl"),
+      JSON.stringify({ type: "user", message: { content: "agent" }, cwd: "/Users/test/x" }) + "\n",
+    );
+
+    delete process.env.CLAUDE_SESSIONS_INCLUDE_AGENTS;
+    const visible = await new ClaudeSessionProvider(tmpDir).findAll();
+    const ids = visible.map((s) => s.id).sort();
+    expect(ids).toEqual(["session-aaa", "session-bbb"]); // the two real ones only
+
+    process.env.CLAUDE_SESSIONS_INCLUDE_AGENTS = "1";
+    const all = await new ClaudeSessionProvider(tmpDir).findAll();
+    expect(all.length).toBe(5);
+    delete process.env.CLAUDE_SESSIONS_INCLUDE_AGENTS;
   });
 
   it("has correct name and resume command", () => {

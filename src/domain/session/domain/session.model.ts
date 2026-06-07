@@ -21,6 +21,8 @@ export interface SessionParams {
   readonly tmuxTarget?: TmuxTargetRef;
   /** Which machine this session lives on. undefined = local. e.g. "pippen". */
   readonly machine?: string;
+  /** True when the session's worktree is a linked git worktree still on disk (not torn down). */
+  readonly hasWorktree?: boolean;
 }
 
 export class Session {
@@ -39,6 +41,7 @@ export class Session {
   readonly isStale?: boolean;
   readonly tmuxTarget?: TmuxTargetRef;
   readonly machine?: string;
+  readonly hasWorktree?: boolean;
 
   constructor(params: SessionParams) {
     this.id = params.id;
@@ -56,6 +59,7 @@ export class Session {
     this.isStale = params.isStale;
     this.tmuxTarget = params.tmuxTarget;
     this.machine = params.machine;
+    this.hasWorktree = params.hasWorktree;
   }
 
   /** A new Session with the enrichment fields overlaid (upstream fields preserved). */
@@ -65,6 +69,7 @@ export class Session {
     isLive?: boolean;
     isStale?: boolean;
     tmuxTarget?: TmuxTargetRef;
+    hasWorktree?: boolean;
   }): Session {
     return new Session({ ...this, modifiedAt: this.modifiedAt, ...extra });
   }

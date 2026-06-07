@@ -4,11 +4,13 @@ import type { SessionDetail } from "../../session/domain/session-detail.model.js
 import type { TmuxOrchestratorPort } from "../application/ports/tmux-orchestrator.port.js";
 import { WorktreeRootResolver } from "./focus/worktree-root.resolver.js";
 import { FocusLabelService } from "./focus/focus-label.service.js";
+import { WorktreeStatusService } from "./focus/worktree-status.service.js";
 import { LivenessService } from "./liveness/liveness.service.js";
 
 interface Enrichers {
   readonly resolver: Pick<WorktreeRootResolver, "resolve">;
   readonly focus: Pick<FocusLabelService, "get">;
+  readonly status: Pick<WorktreeStatusService, "isLinkedWorktree">;
   readonly liveness: Pick<LivenessService, "classify">;
 }
 
@@ -28,6 +30,7 @@ export class LivenessEnrichingRepository implements SessionRepositoryPort {
     this.enrichers = {
       resolver: enrichers?.resolver ?? new WorktreeRootResolver(),
       focus: enrichers?.focus ?? new FocusLabelService(),
+      status: enrichers?.status ?? new WorktreeStatusService(),
       liveness: enrichers?.liveness ?? new LivenessService(),
     };
   }
@@ -35,15 +38,17 @@ export class LivenessEnrichingRepository implements SessionRepositoryPort {
   async findAll(): Promise<Session[]> {
     const sessions = await this.inner.findAll();
     const paneMap = this.orchestrator.paneMap();
-    const { resolver, focus, liveness } = this.enrichers;
+    const { resolver, focus, status, liveness } = this.enrichers;
 
     const enriched = sessions.map((session) => {
       const worktreeRoot = resolver.resolve(session.cwd);
       const focusLabel = worktreeRoot ? focus.get(worktreeRoot) : undefined;
+      const hasWorktree = worktreeRoot ? status.isLinkedWorktree(worktreeRoot) : false;
       const live = liveness.classify(worktreeRoot, { paneMap });
       return session.withEnrichment({
         worktreeRoot,
         focusLabel,
+        hasWorktree,
         isLive: live.isLive,
         isStale: live.isStale,
         tmuxTarget: live.tmuxTarget,

@@ -15,6 +15,7 @@ export interface SessionDTO {
   isLive?: boolean;
   isStale?: boolean;
   tmuxTarget?: { session: string; window: number };
+  hasWorktree?: boolean;
 }
 
 export function toDTO(s: Session): SessionDTO {
@@ -32,6 +33,7 @@ export function toDTO(s: Session): SessionDTO {
     isLive: s.isLive,
     isStale: s.isStale,
     tmuxTarget: s.tmuxTarget,
+    hasWorktree: s.hasWorktree,
   };
 }
 
@@ -53,6 +55,7 @@ export function fromDTO(dto: SessionDTO, machine: string): Session {
     isLive: dto.isLive,
     isStale: dto.isStale,
     tmuxTarget: dto.tmuxTarget,
+    hasWorktree: dto.hasWorktree,
     machine,
   });
 }

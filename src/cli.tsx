@@ -18,7 +18,7 @@ const program = new Command()
     "A persistent tmux dashboard for Claude Code sessions — see live vs dormant, jump into running ones, resume old ones, spawn new ones, without typing a tmux command.",
   )
   .version(pkg.version, "-v, --version")
-  .option("--no-splash", "Skip the splash screen")
+  .option("--splash", "Show the splash screen on launch", false)
   .option("--limit <n>", "How many recent sessions to load (default 300)", "300")
   .option("--all", "Include agent/subagent and workflow transcripts (hidden by default)", false)
   .option("--json", "Print this machine's sessions as JSON and exit (used over SSH)", false)

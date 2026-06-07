@@ -184,7 +184,7 @@ export function RoomsTable({
         ? "Resume (clean)"
         : "Resume";
 
-  const header = `  ${padRight("Session", COL.focus)} ${padRight("Where", COL.where)} ${padRight("Project", COL.project)} ${padRight("Branch", COL.branch)} ${padRight("When", COL.when)} Msgs`;
+  const header = `    ${padRight("Session", COL.focus)} ${padRight("Where", COL.where)} ${padRight("Project", COL.project)} ${padRight("Branch", COL.branch)} ${padRight("When", COL.when)} Msgs`;
 
   let lastSection = "";
   const rows: React.ReactNode[] = [];
@@ -204,11 +204,13 @@ export function RoomsTable({
     const label = s.focusLabel ?? truncate(s.preview, COL.focus);
     const where = s.machine ?? "local";
     const line = `${padRight(truncate(label, COL.focus), COL.focus)} ${padRight(truncate(where, COL.where), COL.where)} ${padRight(truncate(s.project, COL.project), COL.project)} ${padRight(truncate(s.gitBranch, COL.branch), COL.branch)} ${padRight(relTime(s.modifiedAt), COL.when)} ${s.messageCount}`;
+    const wt = s.hasWorktree ? "⎇" : " ";
     rows.push(
       <Box key={s.id}>
         <Text color={isSel ? "cyan" : g.color} bold={isSel}>
           {isSel ? "▸" : " "}
-          {g.mark} {line}
+          {g.mark}
+          {wt} {line}
         </Text>
       </Box>,
     );
@@ -234,7 +236,7 @@ export function RoomsTable({
       <Box paddingTop={1}>
         <Text dimColor>
           Enter {enterLabel} · N New · Space Peek · E Rename · X Close · / Search · Ctrl-Space Back
-          · Q Quit
+          · Q Quit ⎇ active worktree
         </Text>
       </Box>
       {(mode === "search" || filter) && (

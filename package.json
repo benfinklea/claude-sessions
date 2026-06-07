@@ -9,7 +9,7 @@
   },
   "upstream": "https://github.com/vineethkrishnan/agent-sessions",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/cli.js",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "test": "vitest run",

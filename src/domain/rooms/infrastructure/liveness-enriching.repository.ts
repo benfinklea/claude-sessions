@@ -5,6 +5,7 @@ import type { TmuxOrchestratorPort } from "../application/ports/tmux-orchestrato
 import { WorktreeRootResolver } from "./focus/worktree-root.resolver.js";
 import { FocusLabelService } from "./focus/focus-label.service.js";
 import { WorktreeStatusService } from "./focus/worktree-status.service.js";
+import { RepoResolver } from "./focus/repo.resolver.js";
 import { HandoffService } from "./handoff/handoff.service.js";
 import { LivenessService } from "./liveness/liveness.service.js";
 
@@ -12,6 +13,7 @@ interface Enrichers {
   readonly resolver: Pick<WorktreeRootResolver, "resolve">;
   readonly focus: Pick<FocusLabelService, "get">;
   readonly status: Pick<WorktreeStatusService, "isLinkedWorktree">;
+  readonly repo: Pick<RepoResolver, "resolve">;
   readonly handoffs: Pick<HandoffService, "index">;
   readonly liveness: Pick<LivenessService, "classify">;
 }
@@ -33,6 +35,7 @@ export class LivenessEnrichingRepository implements SessionRepositoryPort {
       resolver: enrichers?.resolver ?? new WorktreeRootResolver(),
       focus: enrichers?.focus ?? new FocusLabelService(),
       status: enrichers?.status ?? new WorktreeStatusService(),
+      repo: enrichers?.repo ?? new RepoResolver(),
       handoffs: enrichers?.handoffs ?? new HandoffService(),
       liveness: enrichers?.liveness ?? new LivenessService(),
     };
@@ -41,13 +44,14 @@ export class LivenessEnrichingRepository implements SessionRepositoryPort {
   async findAll(): Promise<Session[]> {
     const sessions = await this.inner.findAll();
     const paneMap = this.orchestrator.paneMap();
-    const { resolver, focus, status, handoffs, liveness } = this.enrichers;
+    const { resolver, focus, status, repo, handoffs, liveness } = this.enrichers;
     const handoffByDir = handoffs.index();
 
     const enriched = sessions.map((session) => {
       const worktreeRoot = resolver.resolve(session.cwd);
       const focusLabel = worktreeRoot ? focus.get(worktreeRoot) : undefined;
       const hasWorktree = worktreeRoot ? status.isLinkedWorktree(worktreeRoot) : false;
+      const repoName = worktreeRoot ? repo.resolve(worktreeRoot) : undefined;
       const handoffPath =
         (worktreeRoot ? handoffByDir.get(worktreeRoot)?.path : undefined) ??
         handoffByDir.get(session.cwd)?.path;
@@ -56,6 +60,7 @@ export class LivenessEnrichingRepository implements SessionRepositoryPort {
         worktreeRoot,
         focusLabel,
         hasWorktree,
+        repo: repoName,
         handoffPath,
         isLive: live.isLive,
         isStale: live.isStale,

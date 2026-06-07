@@ -17,6 +17,7 @@ export interface SessionDTO {
   tmuxTarget?: { session: string; window: number };
   hasWorktree?: boolean;
   handoffPath?: string;
+  repo?: string;
 }
 
 export function toDTO(s: Session): SessionDTO {
@@ -36,6 +37,7 @@ export function toDTO(s: Session): SessionDTO {
     tmuxTarget: s.tmuxTarget,
     hasWorktree: s.hasWorktree,
     handoffPath: s.handoffPath,
+    repo: s.repo,
   };
 }
 
@@ -59,6 +61,7 @@ export function fromDTO(dto: SessionDTO, machine: string): Session {
     tmuxTarget: dto.tmuxTarget,
     hasWorktree: dto.hasWorktree,
     handoffPath: dto.handoffPath,
+    repo: dto.repo,
     machine,
   });
 }

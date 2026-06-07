@@ -25,6 +25,8 @@ export interface SessionParams {
   readonly hasWorktree?: boolean;
   /** Path to the newest /handoff doc for this worktree, if any (resume-where-you-left-off). */
   readonly handoffPath?: string;
+  /** Repo name shared across a repo's worktrees (for "filter by repo"). */
+  readonly repo?: string;
 }
 
 export class Session {
@@ -45,6 +47,7 @@ export class Session {
   readonly machine?: string;
   readonly hasWorktree?: boolean;
   readonly handoffPath?: string;
+  readonly repo?: string;
 
   constructor(params: SessionParams) {
     this.id = params.id;
@@ -64,6 +67,7 @@ export class Session {
     this.machine = params.machine;
     this.hasWorktree = params.hasWorktree;
     this.handoffPath = params.handoffPath;
+    this.repo = params.repo;
   }
 
   /** A new Session with the enrichment fields overlaid (upstream fields preserved). */
@@ -75,6 +79,7 @@ export class Session {
     tmuxTarget?: TmuxTargetRef;
     hasWorktree?: boolean;
     handoffPath?: string;
+    repo?: string;
   }): Session {
     return new Session({ ...this, modifiedAt: this.modifiedAt, ...extra });
   }

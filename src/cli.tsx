@@ -42,8 +42,9 @@ if (opts.json) {
   module.multiAgentRepository.setActiveProvider("claude");
   const sessions = await module.localListUseCase.execute();
   const { toDTO } = await import("./domain/rooms/infrastructure/remote/session-dto.js");
-  process.stdout.write(JSON.stringify(sessions.map(toDTO)));
-  process.exit(0);
+  // Write then exit in the flush callback — exiting immediately truncates a
+  // large payload to ~64KB when stdout is a pipe (e.g. over SSH).
+  process.stdout.write(JSON.stringify(sessions.map(toDTO)), () => process.exit(0));
 }
 
 // Bootstrap the dedicated "sessions" tmux session + Ctrl-Space→HOME binding.

@@ -11,10 +11,15 @@ export class RemoteSessionProvider {
   constructor(
     private readonly host: string,
     private readonly limit: number = 300,
-    private readonly remoteBin: string = process.env.ROOMS_REMOTE_BIN ?? "claude-sessions",
+    // Reference the binary by an absolute path (remote $HOME expands), not PATH —
+    // SSH's non-interactive shell often won't have ~/.npm-global/bin on PATH.
+    // ROOMS_REMOTE_BIN overrides the command verbatim.
+    private readonly remoteBin: string = process.env.ROOMS_REMOTE_BIN ??
+      '"$HOME/bin/claude-sessions"',
   ) {}
 
   async findAll(): Promise<Session[]> {
+    // Single-quoted remote command so the REMOTE shell expands $HOME.
     // -o BatchMode=yes: never hang on a password prompt; fail fast instead.
     const res = spawnSync(
       "ssh",
@@ -24,8 +29,7 @@ export class RemoteSessionProvider {
         "-o",
         "ConnectTimeout=8",
         this.host,
-        // login shell so PATH includes the user's bin dirs
-        `$SHELL -lc '${this.remoteBin} --json --limit ${this.limit}'`,
+        `${this.remoteBin} --json --limit ${this.limit}`,
       ],
       { encoding: "utf8", timeout: 25_000, maxBuffer: 64 * 1024 * 1024 },
     );

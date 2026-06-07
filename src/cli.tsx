@@ -3,149 +3,98 @@
 import React from "react";
 import { Command } from "commander";
 import { render } from "ink";
-import { createSessionModule } from "./domain/session/session.module.js";
-import { App, type CliOptions, type ResumeRequest } from "./domain/session/presenters/app.js";
-import {
-  formatDate,
-  truncate,
-  padRight,
-} from "./domain/session/presenters/formatters/table-formatter.js";
-import { spawn, spawnSync } from "node:child_process";
+import os from "node:os";
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { createRoomsModule } from "./domain/rooms/rooms.module.js";
+import { RoomsApp, type RoomsRequest } from "./domain/rooms/presenters/rooms-app.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json");
 
 const program = new Command()
-  .name("agent-sessions")
+  .name("claude-sessions")
   .description(
-    "Interactive session manager for CLI Agents (Claude, Gemini, Codex, Cursor, Windsurf) — browse, search, delete, and resume past conversations",
+    "A persistent tmux dashboard for Claude Code sessions — see live vs dormant, jump into running ones, resume old ones, spawn new ones, without typing a tmux command.",
   )
   .version(pkg.version, "-v, --version")
-  .option("--agent <name>", "Specify the agent (claude, gemini, etc.)")
-  .option("--fzf", "Use fzf for selection (requires fzf)", false)
-  .option("--delete", "Enable delete mode", false)
   .option("--no-splash", "Skip the splash screen")
+  .option("--limit <n>", "How many recent sessions to load (default 300)", "300")
   .parse();
 
-const opts = program.opts<{ agent?: string; fzf: boolean; delete: boolean; splash: boolean }>();
+const opts = program.opts<{ splash: boolean; limit: string }>();
 
-const options: CliOptions = {
-  agent: opts.agent,
-  fzf: opts.fzf,
-  delete: opts.delete,
-  noSplash: !opts.splash,
-};
+// Fast open: cap how many recent sessions the Claude provider parses.
+if (!process.env.CLAUDE_SESSIONS_LIMIT && opts.limit) {
+  process.env.CLAUDE_SESSIONS_LIMIT = opts.limit;
+}
 
-const sessionModule = createSessionModule();
+const module = createRoomsModule();
+const { orchestrator, worktreeActions, resolveRowAction } = module;
 
-if (options.agent) {
-  const validProviders = sessionModule.multiAgentRepository.getProviders();
-  const validIds = validProviders.map((p) => p.id);
-  if (options.agent !== "all" && !validIds.includes(options.agent.toLowerCase())) {
-    console.error(`Unknown agent: "${options.agent}". Valid options: ${validIds.join(", ")}, all`);
-    process.exit(1);
+// Bootstrap the dedicated "sessions" tmux session + Ctrl-Space→HOME binding.
+// If tmux is unavailable we still run; jumps just fall back to a plain resume.
+const tmuxReady = orchestrator.ensureLobby(os.homedir());
+
+let pending: RoomsRequest | null = null;
+const instance = render(
+  <RoomsApp
+    module={module}
+    options={{ noSplash: !opts.splash }}
+    version={pkg.version}
+    onRequest={(req) => {
+      pending = req;
+    }}
+  />,
+);
+
+instance.waitUntilExit().then(() => {
+  if (!pending) return;
+  const req: RoomsRequest = pending;
+
+  if (req.kind === "new") {
+    // Spawn `c -wt <slug>` in a new lobby window, then jump to it.
+    const { command, args } = worktreeActions.spawnCommand(req.slug);
+    const target = tmuxReady
+      ? orchestrator.spawnWindow({ name: req.slug, cwd: os.homedir(), command, args })
+      : null;
+    if (target) orchestrator.jumpTo(target);
+    else fallbackExec(command, args, os.homedir());
+    return;
   }
-}
 
-if (options.fzf) {
-  runFzfMode();
-} else {
-  runTuiMode();
-}
+  // resume
+  const action = resolveRowAction.resolve(req.session);
+  if (action.kind === "JUMP" && tmuxReady) {
+    orchestrator.jumpTo(action.target);
+    process.exit(0);
+  }
 
-function runTuiMode(): void {
-  let pendingResume: ResumeRequest | null = null;
-
-  const handleResume = (request: ResumeRequest) => {
-    pendingResume = request;
-  };
-
-  const instance = render(
-    <App module={sessionModule} options={options} version={pkg.version} onResume={handleResume} />,
+  // RESUME (dormant/stale) — open in a new lobby window, or fall back.
+  const resumeArgs = module.resumeSessionUseCase.buildResumeArgs(
+    req.session.id,
+    req.session.provider,
   );
+  if (!resumeArgs) process.exit(0);
 
-  instance.waitUntilExit().then(() => {
-    if (pendingResume) {
-      const { sessionId, providerName, cwd } = pendingResume;
-      const resumeArgs = sessionModule.resumeSessionUseCase.buildResumeArgs(
-        sessionId,
-        providerName,
-      );
-      if (resumeArgs) {
-        const spawnOptions: { stdio: "inherit"; cwd?: string } = { stdio: "inherit" };
-        if (cwd) spawnOptions.cwd = cwd;
-        const result = spawnSync(resumeArgs.command, resumeArgs.args, spawnOptions);
-        process.exit(result.status ?? 0);
-      }
+  const cwd = req.session.worktreeRoot ?? req.session.cwd;
+  if (tmuxReady) {
+    const target = orchestrator.spawnWindow({
+      name: req.session.focusLabel ?? req.session.project,
+      cwd,
+      command: resumeArgs.command,
+      args: resumeArgs.args,
+    });
+    if (target) {
+      orchestrator.jumpTo(target);
+      process.exit(0);
     }
-  });
-}
-
-async function runFzfMode(): Promise<void> {
-  if (options.agent) {
-    sessionModule.multiAgentRepository.setActiveProvider(options.agent);
   }
+  fallbackExec(resumeArgs.command, resumeArgs.args, cwd);
+});
 
-  const sessions = await sessionModule.listSessionsUseCase.execute();
-
-  if (sessions.length === 0) {
-    const agentName =
-      sessionModule.multiAgentRepository.getActiveProvider()?.name || "active agent";
-    console.error(`No sessions found for ${agentName}.`);
-    process.exit(1);
-  }
-
-  const lines = sessions.map((session) => {
-    const date = padRight(formatDate(session.modifiedAt), 16);
-    const agent = padRight(truncate(session.provider, 8), 8);
-    const project = padRight(truncate(session.project, 24), 24);
-    const branch = padRight(truncate(session.gitBranch, 16), 16);
-    const messageCount = padRight(String(session.messageCount), 5);
-    const preview = truncate(session.preview, 60);
-    return `${session.id}::${session.provider}::${session.cwd}\t${date} │ ${agent} │ ${project} │ ${branch} │ ${messageCount} │ ${preview}`;
-  });
-
-  const header = `        ${padRight("Date", 16)} │ ${padRight("Agent", 8)} │ ${padRight("Project", 24)} │ ${padRight("Branch", 16)} │ ${padRight("Msgs", 5)} │ First Message`;
-
-  const fzf = spawn(
-    "fzf",
-    ["--header", header, "--reverse", "--no-sort", "--with-nth", "2..", "--delimiter", "\t"],
-    {
-      stdio: ["pipe", "pipe", "inherit"],
-    },
-  );
-
-  fzf.stdin?.write(lines.join("\n"));
-  fzf.stdin?.end();
-
-  let output = "";
-  fzf.stdout?.on("data", (chunk: Buffer) => {
-    output += chunk.toString();
-  });
-
-  fzf.on("close", (code) => {
-    if (code !== 0 || !output.trim()) process.exit(0);
-
-    const selection = output.trim().split("\t")[0];
-    if (selection) {
-      const parts = selection.split("::");
-      if (parts.length < 2) return;
-      const sessionId = parts[0]!;
-      const providerName = parts[1]!;
-      const cwd = parts.slice(2).join("::");
-      if (sessionId && providerName) {
-        const resumeArgs = sessionModule.resumeSessionUseCase.buildResumeArgs(
-          sessionId,
-          providerName,
-        );
-        if (resumeArgs) {
-          const spawnOptions: { stdio: "inherit"; cwd?: string } = { stdio: "inherit" };
-          if (cwd) spawnOptions.cwd = cwd;
-          const result = spawnSync(resumeArgs.command, resumeArgs.args, spawnOptions);
-          process.exit(result.status ?? 0);
-        }
-      }
-    }
-  });
+/** No tmux (or spawn failed): run the command inline, handing over the terminal. */
+function fallbackExec(command: string, args: string[], cwd: string): void {
+  const result = spawnSync(command, args, { stdio: "inherit", cwd });
+  process.exit(result.status ?? 0);
 }

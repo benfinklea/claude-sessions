@@ -52,8 +52,15 @@ export class ClaudeSessionProvider implements SessionProviderPort {
       }
     }
 
+    // Fast-open cap: collecting stats is cheap, but parsing the first message of
+    // every .jsonl is not. When CLAUDE_SESSIONS_LIMIT is set (e.g. by the
+    // dashboard), only the most-recent N files are parsed. Unset = parse all.
+    results.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+    const limit = Number(process.env.CLAUDE_SESSIONS_LIMIT);
+    const capped = Number.isInteger(limit) && limit > 0 ? results.slice(0, limit) : results;
+
     return Promise.all(
-      results.map(async (file) => {
+      capped.map(async (file) => {
         const metadata = await parseSessionFileAsync(file.filePath);
         return new Session({
           id: path.basename(file.filePath, ".jsonl"),

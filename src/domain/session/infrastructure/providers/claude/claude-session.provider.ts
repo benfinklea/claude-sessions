@@ -87,44 +87,57 @@ export class ClaudeSessionProvider implements SessionProviderPort {
       }
     }
 
-    // Fast-open cap: collecting stats is cheap, but parsing the first message of
-    // every .jsonl is not. When CLAUDE_SESSIONS_LIMIT is set (e.g. by the
-    // dashboard), only the most-recent N files are parsed. Unset = parse all.
+    // Newest first.
     results.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-    const limit = Number(process.env.CLAUDE_SESSIONS_LIMIT);
-    const capped = Number.isInteger(limit) && limit > 0 ? results.slice(0, limit) : results;
-
     const includeAgents = this.includeAgents();
-    const parsed = await Promise.all(
-      capped.map(async (file) => {
-        const metadata = await parseSessionFileAsync(file.filePath);
-        return { file, metadata };
-      }),
-    );
 
-    return (
-      parsed
-        // Sidechain transcripts (Task/Agent subagents) and /tmp automation/worker
-        // runs aren't sessions a human drove — hidden unless --all.
-        .filter(
-          ({ metadata }) =>
-            includeAgents || (!metadata.isSidechain && !isAutomationCwd(metadata.cwd)),
-        )
-        .map(
-          ({ file, metadata }) =>
-            new Session({
-              id: path.basename(file.filePath, ".jsonl"),
-              filePath: file.filePath,
-              project: decodeProjectPath(file.dirName),
-              gitBranch: metadata.gitBranch,
-              messageCount: metadata.messageCount,
-              preview: metadata.preview,
-              modifiedAt: file.mtime,
-              cwd: metadata.cwd,
-              provider: this.name,
-            }),
-        )
-    );
+    const keep = (m: { isSidechain: boolean; cwd: string }) =>
+      includeAgents || (!m.isSidechain && !isAutomationCwd(m.cwd));
+
+    const toSession = (
+      file: (typeof results)[number],
+      metadata: { gitBranch: string; messageCount: number; preview: string; cwd: string },
+    ) =>
+      new Session({
+        id: path.basename(file.filePath, ".jsonl"),
+        filePath: file.filePath,
+        project: decodeProjectPath(file.dirName),
+        gitBranch: metadata.gitBranch,
+        messageCount: metadata.messageCount,
+        preview: metadata.preview,
+        modifiedAt: file.mtime,
+        cwd: metadata.cwd,
+        provider: this.name,
+      });
+
+    const limit = Number(process.env.CLAUDE_SESSIONS_LIMIT);
+    // No limit → parse everything, then filter.
+    if (!Number.isInteger(limit) || limit <= 0) {
+      const parsed = await Promise.all(
+        results.map(async (file) => ({
+          file,
+          metadata: await parseSessionFileAsync(file.filePath),
+        })),
+      );
+      return parsed.filter((p) => keep(p.metadata)).map((p) => toSession(p.file, p.metadata));
+    }
+
+    // Limit counts REAL (surviving) sessions, not raw files: parse newest-first
+    // in batches, applying the filter, until we have `limit` survivors. Avoids
+    // returning only a handful when recent files are mostly /tmp automation.
+    const BATCH = 200;
+    const out: Session[] = [];
+    for (let i = 0; i < results.length && out.length < limit; i += BATCH) {
+      const batch = results.slice(i, i + BATCH);
+      const parsed = await Promise.all(
+        batch.map(async (file) => ({ file, metadata: await parseSessionFileAsync(file.filePath) })),
+      );
+      for (const p of parsed) {
+        if (keep(p.metadata)) out.push(toSession(p.file, p.metadata));
+        if (out.length >= limit) break;
+      }
+    }
+    return out;
   }
 
   async getDetail(filePath: string): Promise<SessionDetail> {
